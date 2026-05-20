@@ -1,0 +1,158 @@
+// TokenShelf — Prisma schema
+//
+// Two ideas the data model has to make easy:
+//   1. A Project = one "realization" an engineer is showing off.
+//   2. Every Project has many TokenReceipts — verifiable usage facts.
+//      Aggregates (total tokens, USD spend) live on Project so the feed
+//      is cheap to render, and recompute on receipt insert.
+//
+// ProviderConnection holds the per-user OAuth tokens / API keys that
+// /api/sync uses to import receipts from Anthropic, OpenAI, GitHub, etc.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Auth.js / NextAuth tables (PrismaAdapter spec) ----------------------
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// --- Core domain ---------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+
+  handle  String? @unique // public-facing slug, e.g. /u/anthony
+  bio     String? @db.Text
+  website String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts            Account[]
+  sessions            Session[]
+  projects            Project[]
+  providerConnections ProviderConnection[]
+}
+
+enum ProviderKind {
+  GITHUB
+  ANTHROPIC
+  OPENAI
+  GOOGLE
+  AZURE_OPENAI
+  REPLICATE
+  OTHER
+}
+
+model ProviderConnection {
+  id        String       @id @default(cuid())
+  userId    String
+  kind      ProviderKind
+  // "default" means "primary connection of this kind for this user". A user
+  // may attach multiple connections of the same kind by giving them distinct
+  // labels (e.g. "personal", "work").
+  label     String       @default("default")
+  // For OAuth providers we store tokens; for API-key providers we store an
+  // encrypted secret. Encryption is left to the application layer.
+  secret    String?      @db.Text
+  meta      Json? // raw provider metadata (account id, org, etc.)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind, label])
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  ownerId     String
+  slug        String
+  title       String
+  tagline     String?
+  description String?  @db.Text
+  coverUrl    String?
+  demoUrl     String?
+  repoUrl     String? // github.com/owner/name
+  tags        String[] @default([])
+
+  // Aggregates. Source of truth = TokenReceipt; these are denormalized.
+  totalInputTokens  BigInt  @default(0)
+  totalOutputTokens BigInt  @default(0)
+  totalCostUsdCents Int     @default(0) // store cents to avoid float drift
+  receiptCount      Int     @default(0)
+
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner    User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  receipts TokenReceipt[]
+
+  @@unique([ownerId, slug])
+  @@index([published, createdAt])
+}
+
+model TokenReceipt {
+  id        String       @id @default(cuid())
+  projectId String
+  source    ProviderKind
+  model     String // e.g. claude-opus-4-7, gpt-4o
+  inputTokens  Int
+  outputTokens Int
+  costUsdCents Int     @default(0)
+  occurredAt   DateTime @default(now())
+  // Optional verification chain: a hash + signature from the provider's usage
+  // export, or the request_id we pulled it from. Lets viewers click through
+  // to the original receipt.
+  externalId String?
+  verified   Boolean @default(false)
+  raw        Json?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, occurredAt])
+}

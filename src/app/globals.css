@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: hsl(222 14% 7%);
+  color: hsl(210 20% 96%);
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: hsl(142 71% 50% / 0.35);
+}
