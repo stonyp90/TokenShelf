@@ -1,21 +1,26 @@
 # TokenShelf
 
 A Behance-style showcase for AI engineering. Every project carries a
-verifiable token-spend receipt — pulled (eventually) straight from Anthropic,
-OpenAI, GitHub Models, and friends — so "output per dollar" stops being a vibe.
+verifiable token-spend receipt — pulled directly from Anthropic, OpenAI,
+GitHub, and friends — so "output per dollar" stops being a vibe.
 
 ```
 project ── many ──▶ TokenReceipt
-                       (provider, model, input/output tokens, USD, verified?)
+                       trustTier ∈ { VERIFIED, PROXIED, SELF_REPORTED }
+                       responseHash + ed25519 signature for VERIFIED rows
 ```
+
+See [PLAN.md](PLAN.md) for the architecture and milestone roadmap, and
+[CLAUDE.md](CLAUDE.md) for the design rules.
 
 ## Stack
 
 - Next.js 15 (App Router, RSC, Server Actions)
 - TypeScript + Tailwind
-- Auth.js v5 with the **GitHub** OAuth provider (more to come)
+- Auth.js v5 with the **GitHub** OAuth provider
 - Prisma + Postgres
 - Zod for API validation
+- ed25519 receipt signatures + AES-256-GCM envelope encryption for at-rest secrets
 
 ## Quickstart
 
@@ -24,9 +29,13 @@ project ── many ──▶ TokenReceipt
 docker run -d --name tokenshelf-pg -p 5432:5432 \
   -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=tokenshelf postgres:16
 
-# 1. Env
+# 1. Env — see .env.example for every var. Quick generation:
 cp .env.example .env
-# Fill in: AUTH_SECRET, AUTH_GITHUB_ID, AUTH_GITHUB_SECRET
+echo "AUTH_SECRET=$(openssl rand -base64 32)" >> .env
+echo "ENCRYPTION_KEY=$(node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\")" >> .env
+echo "CRON_SECRET=$(openssl rand -hex 32)" >> .env
+node -e "console.log('SIGNING_PRIVATE_KEY=\"' + require('crypto').generateKeyPairSync('ed25519').privateKey.export({type:'pkcs8',format:'pem'}).replaceAll('\n','\\n') + '\"')" >> .env
+# Fill in AUTH_GITHUB_ID / AUTH_GITHUB_SECRET manually.
 
 # 2. Install + DB
 pnpm install
@@ -48,70 +57,106 @@ Drop the client id/secret into `.env` as `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET`
 
 ## Routes
 
-| Path                    | Notes                                                   |
-| ----------------------- | ------------------------------------------------------- |
-| `/`                     | Public feed of latest projects                          |
-| `/u/[handle]`           | Public profile                                          |
-| `/u/[handle]/[slug]`    | Project detail with receipts table                      |
-| `/new`                  | Auth-gated: post a project                              |
-| `/settings`             | Auth-gated: handle, bio, provider connections           |
-| `POST /api/receipts`    | Owner-only: add a token receipt (programmatic ingest)   |
-| `POST /api/sync/[kind]` | Owner-only: pull usage from a connected provider (stub) |
+| Path | Notes |
+| --- | --- |
+| `/` | Public feed, sorted by verified receipts |
+| `/u/[handle]` | Public profile |
+| `/u/[handle]/[slug]` | Project detail with receipts table + trust badges |
+| `/u/[handle]/[slug]/decisions` | Decision tab: model recommender, cache gap, peer benchmark |
+| `/new` | Auth-gated: post a project |
+| `/settings` | Profile + provider connections (envelope-encrypted) |
+| `/settings/tokens` | Personal access token management |
+| `POST /api/receipts` | Owner-only: post receipts via session **or** `Bearer tks_…` PAT |
+| `POST /api/sync/[kind]` | Owner-only: pull usage from a connected provider |
+| `POST /api/cron/sync-all` | Cron-only: nightly sync (Vercel) |
+| `POST /api/pat` | Mint a Personal Access Token (session-only) |
+| `GET /.well-known/tokenshelf-verify.json` | Public key for independent receipt verification |
 
-### Posting a receipt programmatically
+## Providers
+
+| Provider | What we pull | Endpoint |
+| --- | --- | --- |
+| **Anthropic** | per-bucket usage incl. cache reads / writes / service tier | `GET /v1/organizations/usage_report/messages` |
+| **OpenAI** | bucketed completions usage; batch flag respected | `GET /v1/organization/usage/completions` |
+| **GitHub** | repo-access verification (not a usage source today) | `GET /repos/{o}/{r}/collaborators/{u}/permission` |
+
+All sync writes hit `(source, externalId)` uniqueness — re-running is safe.
+
+## Posting a receipt with a PAT
 
 ```bash
+# Mint a project-scoped token in /settings/tokens, then:
 curl -X POST http://localhost:3000/api/receipts \
+  -H "authorization: Bearer tks_..." \
   -H "content-type: application/json" \
-  -b "<your session cookie>" \
   -d '{
-    "projectSlug": "rag-eval-suite",
     "source": "ANTHROPIC",
-    "model": "claude-opus-4-7",
-    "inputTokens": 12000,
+    "model":  "claude-sonnet-4-6",
+    "inputTokens":  12000,
     "outputTokens": 3400,
-    "costUsdCents": 88,
-    "verified": true
+    "cacheReadTokens": 9000
   }'
 ```
 
-## Roadmap (post-MVP)
+Or with the SDK wrapper:
 
-- **Provider sync adapters** under `src/lib/providers/{anthropic,openai,github}.ts` —
-  pull real usage on a cron and tag receipts as `verified`.
-- **Personal access tokens** for `/api/receipts` so CI can post receipts without
-  a browser session.
-- **Encrypted secrets** — `ProviderConnection.secret` is plaintext today; wrap
-  with KMS-backed envelope encryption before any real deployment.
-- **Pairwise / Elo ranking** between projects with similar token budgets.
-- **Embeddable badge** (`<img src="…/badge/u/handle/slug">`) so engineers can
-  link the receipt from their own README.
+```ts
+import Anthropic from "@anthropic-ai/sdk";
+import { wrap } from "@tokenshelf/anthropic";
+const anthropic = wrap(new Anthropic(), {
+  projectSlug: "rag-eval-suite",
+  apiToken: process.env.TOKENSHELF_TOKEN!,
+});
+```
+
+## Verifying a receipt
+
+Independent verifiers can:
+
+1. `GET /.well-known/tokenshelf-verify.json` — pull our public key.
+2. Take any TokenReceipt with `trustTier=VERIFIED`.
+3. Recompute `responseHash = sha256(canonicalize(raw))`.
+4. Verify `signature` covers `responseHash + "|" + externalId` under ed25519.
+
+See [`src/lib/crypto/sign.ts`](src/lib/crypto/sign.ts) for the canonicalisation
+algorithm.
+
+## Roadmap
+
+Tracked in [PLAN.md](PLAN.md). Today: M0–M2 partially shipped. Next big bets:
+
+- M2: `EvalRun` + Pareto frontier for output vs. eval-score.
+- M3: hosted gateway `gw.tokenshelf.dev` for real-time `PROXIED` receipts.
 
 ## Layout
 
 ```
 src/
-  app/
-    page.tsx                  # feed
-    layout.tsx
-    globals.css
-    u/[handle]/page.tsx       # profile
-    u/[handle]/[slug]/page.tsx  # project
-    new/page.tsx              # create project (server action)
-    settings/page.tsx         # profile + provider connections
-    api/
-      auth/[...nextauth]/route.ts
-      receipts/route.ts
-      sync/[kind]/route.ts
+  app/                            # Next.js App Router
+    api/{receipts,sync,cron,pat}/ # JSON endpoints
+    .well-known/                  # Public verifier key
+    u/[handle]/[slug]/decisions/  # Decision layer page
+    settings/tokens/              # PAT management
   components/
     header.tsx
     project-card.tsx
+    trust-badge.tsx
   lib/
-    db.ts                     # prisma singleton
-    format.ts                 # token / USD formatters
-    cn.ts
-  auth.ts                     # Auth.js config
+    crypto/{envelope,sign}.ts     # AES-GCM + ed25519
+    pricing/{anthropic,openai}.ts # rate cards
+    sync/{anthropic,openai,github,index}.ts  # provider adapters + orchestrator
+    decisions/{recommend-model,cache-gap,peer-benchmark}.ts
+    pat/index.ts                  # Personal Access Tokens
+    audit/index.ts                # AuditEvent writes
+    format.ts, cn.ts, db.ts
+  auth.ts                         # Auth.js config
+
+packages/
+  sdk-anthropic/                  # @tokenshelf/anthropic — drop-in wrap()
+
 prisma/
-  schema.prisma
-  seed.ts
+  schema.prisma                   # source of truth
+  seed.ts                         # demo data
+
+vercel.json                       # nightly cron
 ```

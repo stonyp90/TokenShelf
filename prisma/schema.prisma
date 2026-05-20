@@ -3,11 +3,12 @@
 // Two ideas the data model has to make easy:
 //   1. A Project = one "realization" an engineer is showing off.
 //   2. Every Project has many TokenReceipts — verifiable usage facts.
-//      Aggregates (total tokens, USD spend) live on Project so the feed
-//      is cheap to render, and recompute on receipt insert.
+//      Aggregates (total tokens, USD spend, cache stats) live on Project so the
+//      feed is cheap to render, and recompute on receipt insert.
 //
-// ProviderConnection holds the per-user OAuth tokens / API keys that
-// /api/sync uses to import receipts from Anthropic, OpenAI, GitHub, etc.
+// ProviderConnection holds the per-user OAuth tokens / API keys that the
+// sync workers use to import verified receipts. `secret` is envelope-encrypted
+// — see src/lib/crypto/envelope.ts.
 
 generator client {
   provider = "prisma-client-js"
@@ -68,13 +69,22 @@ model User {
   bio     String? @db.Text
   website String?
 
+  // Payout target for marketplace earnings. M3 swap to Stripe Connect account id.
+  payoutEmail String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  accounts            Account[]
-  sessions            Session[]
-  projects            Project[]
-  providerConnections ProviderConnection[]
+  accounts             Account[]
+  sessions             Session[]
+  projects             Project[]
+  providerConnections  ProviderConnection[]
+  personalAccessTokens PersonalAccessToken[]
+  auditEvents          AuditEvent[]
+  followers            Follow[] @relation("followed")
+  following            Follow[] @relation("follower")
+  favorites            Favorite[]
+  orders               Order[]  @relation("buyer")
 }
 
 enum ProviderKind {
@@ -84,6 +94,10 @@ enum ProviderKind {
   GOOGLE
   AZURE_OPENAI
   REPLICATE
+  BEDROCK
+  GROQ
+  TOGETHER
+  FIREWORKS
   OTHER
 }
 
@@ -95,10 +109,13 @@ model ProviderConnection {
   // may attach multiple connections of the same kind by giving them distinct
   // labels (e.g. "personal", "work").
   label     String       @default("default")
-  // For OAuth providers we store tokens; for API-key providers we store an
-  // encrypted secret. Encryption is left to the application layer.
-  secret    String?      @db.Text
+  // Envelope-encrypted secret. Stored as JSON: { v, iv, ct, tag, dekId }.
+  // Plaintext never touches Postgres. See src/lib/crypto/envelope.ts.
+  secretCipher Json?
   meta      Json? // raw provider metadata (account id, org, etc.)
+  // Sync bookkeeping
+  lastSyncedAt   DateTime?
+  lastSyncCursor String? // provider-defined paging cursor / "since" token
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
@@ -119,40 +136,215 @@ model Project {
   repoUrl     String? // github.com/owner/name
   tags        String[] @default([])
 
+  // Privacy: when false, the proxy/SDK only records byte counts. When true,
+  // the user has opted in to attaching prompts/completions to receipts.
+  storePrompts Boolean @default(false)
+  // Repo verification result, cached. Set by GitHub adapter.
+  repoVerified Boolean @default(false)
+
   // Aggregates. Source of truth = TokenReceipt; these are denormalized.
-  totalInputTokens  BigInt  @default(0)
-  totalOutputTokens BigInt  @default(0)
-  totalCostUsdCents Int     @default(0) // store cents to avoid float drift
-  receiptCount      Int     @default(0)
+  totalInputTokens     BigInt @default(0)
+  totalOutputTokens    BigInt @default(0)
+  totalCacheReadTokens BigInt @default(0)
+  totalCacheWriteTokens BigInt @default(0)
+  totalCostUsdCents    Int    @default(0)
+  receiptCount         Int    @default(0)
+  verifiedReceiptCount Int    @default(0)
 
   published Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  owner    User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  receipts TokenReceipt[]
+  owner     User                  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  receipts  TokenReceipt[]
+  evals     EvalRun[]
+  tokens    PersonalAccessToken[]
+  listing   Listing?
+  favorites Favorite[]
 
   @@unique([ownerId, slug])
   @@index([published, createdAt])
+  @@index([verifiedReceiptCount(sort: Desc), createdAt(sort: Desc)])
+}
+
+// --- Marketplace ---------------------------------------------------------
+
+enum ListingKind {
+  TEMPLATE        // a project users can purchase the source of
+  AGENT           // packaged agent users can invoke via the proxy gateway
+  PROMPT_PACK     // prompt collection
+  EVAL_SUITE      // a benchmark
+  SERVICE         // human service ("hire me to build X")
+}
+
+enum License {
+  MIT
+  APACHE_2_0
+  GPL_3_0
+  COMMERCIAL_SINGLE
+  COMMERCIAL_TEAM
+  PROPRIETARY
+}
+
+model Listing {
+  id          String      @id @default(cuid())
+  projectId   String      @unique
+  kind        ListingKind
+  priceUsdCents Int
+  license     License     @default(COMMERCIAL_SINGLE)
+  blurb       String?     @db.Text
+  active      Boolean     @default(true)
+  // For AGENT listings: a JSON descriptor of how to invoke it via the gateway.
+  invocation  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  orders  Order[]
+
+  @@index([active, kind, createdAt])
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  REFUNDED
+  FAILED
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  listingId    String
+  buyerId      String
+  priceUsdCents Int
+  status       OrderStatus @default(PENDING)
+  // Stripe stub fields — fill once Stripe is wired.
+  paymentIntentId String?  @unique
+  paidAt       DateTime?
+  refundedAt   DateTime?
+  // Soft delivery: a download URL or invocation token, depending on listing kind.
+  deliveryUrl  String?
+  notes        String?     @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyer   User    @relation("buyer", fields: [buyerId], references: [id], onDelete: Cascade)
+
+  @@index([buyerId, createdAt])
+  @@index([listingId, createdAt])
+  @@index([status])
+}
+
+// --- Social --------------------------------------------------------------
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followedId  String
+  createdAt   DateTime @default(now())
+
+  follower User @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followed User @relation("followed", fields: [followedId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followedId])
+  @@index([followedId])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([projectId])
+}
+
+enum TrustTier {
+  VERIFIED // pulled from provider Admin API, signed by TokenShelf
+  PROXIED // observed by our hosted gateway
+  SELF_REPORTED // user-typed or unauthenticated POST
 }
 
 model TokenReceipt {
-  id        String       @id @default(cuid())
-  projectId String
-  source    ProviderKind
-  model     String // e.g. claude-opus-4-7, gpt-4o
-  inputTokens  Int
-  outputTokens Int
-  costUsdCents Int     @default(0)
-  occurredAt   DateTime @default(now())
-  // Optional verification chain: a hash + signature from the provider's usage
-  // export, or the request_id we pulled it from. Lets viewers click through
-  // to the original receipt.
-  externalId String?
-  verified   Boolean @default(false)
-  raw        Json?
+  id           String       @id @default(cuid())
+  projectId    String
+  source       ProviderKind
+  model        String // canonical model id, e.g. claude-opus-4-7, gpt-4o
+  serviceTier  String? // "standard" | "batch" | "scale" | provider-specific
+  inputTokens       Int
+  outputTokens      Int
+  cacheReadTokens   Int     @default(0)
+  cacheWriteTokens  Int     @default(0)
+  costUsdCents      Int     @default(0)
+  occurredAt        DateTime @default(now())
+  externalId        String? // provider request_id or usage-row id
+  trustTier         TrustTier @default(SELF_REPORTED)
+  // Verification chain (set by sync workers / proxy):
+  responseHash      String? // sha256(canonicalize(raw))
+  signature         String? // ed25519 over responseHash + externalId
+  signerKeyId       String? // "tks-sig-1"
+  raw               Json?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([source, externalId])
+  @@index([projectId, occurredAt])
+  @@index([trustTier])
+}
+
+model EvalRun {
+  id         String   @id @default(cuid())
+  projectId  String
+  suite      String // "swe-bench-lite", "mmlu", or a user-defined slug
+  score      Float // 0..1
+  modelUsed  String?
+  details    Json?
+  occurredAt DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, occurredAt])
+}
+
+model PersonalAccessToken {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String? // when set, the token is scoped to a single project
+  name      String // user-facing label ("CI ingest", "laptop dev")
+  prefix    String   @unique // first 12 chars of `tks_…` for display
+  hash      String // bcrypt/scrypt(rest of token)
+  scopes    String[] @default([]) // ["receipts:write"]
+  lastUsedAt DateTime?
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, revokedAt])
+}
+
+model AuditEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String // "sync.anthropic.start", "receipt.create", "pat.mint", …
+  target    String? // entity id this acted on
+  meta      Json?
+  ip        String?
+  ua        String?
+  success   Boolean
+  error     String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
 }

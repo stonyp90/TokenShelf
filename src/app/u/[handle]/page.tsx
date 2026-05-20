@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { ProjectCard } from "@/components/project-card";
+import { FollowButton } from "@/components/follow-button";
 import { formatTokens, formatUsd } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -41,10 +42,11 @@ export default async function ProfilePage({
         ) : (
           <div className="h-20 w-20 rounded-full bg-surface2" />
         )}
-        <div className="space-y-1">
+        <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">{user.name ?? `@${user.handle}`}</h1>
           <p className="text-muted">@{user.handle}</p>
           {user.bio ? <p className="max-w-prose text-sm text-muted">{user.bio}</p> : null}
+          <FollowButton followedId={user.id} followedHandle={user.handle ?? handle} />
         </div>
         <div className="ml-auto flex gap-6 font-mono text-sm">
           <Stat label="projects" value={user.projects.length.toString()} />

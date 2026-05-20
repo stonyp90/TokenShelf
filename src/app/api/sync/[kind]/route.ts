@@ -1,25 +1,25 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { syncProvider, verifyRepoAccess } from "@/lib/sync";
+import { decryptSecret } from "@/lib/crypto/envelope";
+import { audit, clientIp } from "@/lib/audit";
+import type { Prisma, ProviderKind } from "@prisma/client";
 
-// /api/sync/[kind]?projectSlug=foo
-//
-// Pulls usage from the named provider for the authenticated user and writes
-// TokenReceipts to the named project. The actual provider integrations are
-// stubbed for now — wire them in adapter modules under src/lib/providers/.
+const KIND_MAP: Record<string, ProviderKind> = {
+  anthropic: "ANTHROPIC",
+  openai: "OPENAI",
+  github: "GITHUB",
+};
 
-const SUPPORTED = new Set(["anthropic", "openai", "github"]);
-
-export async function POST(
-  req: Request,
-  context: { params: Promise<{ kind: string }> },
-) {
+export async function POST(req: Request, context: { params: Promise<{ kind: string }> }) {
   const { kind } = await context.params;
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
-  if (!SUPPORTED.has(kind)) {
+  const canonical = KIND_MAP[kind.toLowerCase()];
+  if (!canonical) {
     return NextResponse.json({ error: "unsupported_provider", kind }, { status: 400 });
   }
 
@@ -28,35 +28,47 @@ export async function POST(
   if (!projectSlug) {
     return NextResponse.json({ error: "missing_projectSlug" }, { status: 400 });
   }
-
   const project = await prisma.project.findUnique({
     where: { ownerId_slug: { ownerId: session.user.id, slug: projectSlug } },
   });
-  if (!project) return NextResponse.json({ error: "project_not_found" }, { status: 404 });
-
-  const conn = await prisma.providerConnection.findFirst({
-    where: { userId: session.user.id, kind: kind.toUpperCase() as never },
-  });
-  if (!conn?.secret) {
-    return NextResponse.json(
-      { error: "no_provider_connection", hint: `Connect ${kind} in /settings` },
-      { status: 412 },
-    );
+  if (!project) {
+    return NextResponse.json({ error: "project_not_found" }, { status: 404 });
   }
 
-  // TODO: wire real adapters
-  //   - anthropic: GET https://api.anthropic.com/v1/organizations/usage_report/messages
-  //   - openai:    GET https://api.openai.com/v1/usage?date=YYYY-MM-DD
-  //   - github:    GET /user/settings/billing/usage (Copilot) or models usage
-  // Returning a clear "not implemented" so callers see the shape.
-  return NextResponse.json(
-    {
-      ok: false,
-      status: "not_implemented",
-      provider: kind,
-      projectId: project.id,
-      hint: "Provider sync adapters live in src/lib/providers/. PRs welcome.",
-    },
-    { status: 501 },
-  );
+  // GitHub isn't a token-usage source; the action is "verify repo access".
+  if (canonical === "GITHUB") {
+    if (!project.repoUrl) {
+      return NextResponse.json({ error: "project_has_no_repoUrl" }, { status: 412 });
+    }
+    const conn = await prisma.providerConnection.findFirst({
+      where: { userId: session.user.id, kind: "GITHUB" },
+    });
+    if (!conn?.secretCipher) {
+      return NextResponse.json({ error: "no_provider_connection" }, { status: 412 });
+    }
+    const secret = decryptSecret(conn.secretCipher as Prisma.JsonObject);
+    const result = await verifyRepoAccess({ secret, repoUrl: project.repoUrl });
+    await prisma.project.update({
+      where: { id: project.id },
+      data: { repoVerified: result.ok },
+    });
+    await audit({
+      userId: session.user.id,
+      action: "sync.github.verify",
+      target: project.id,
+      meta: result,
+      ip: clientIp(req),
+      ua: req.headers.get("user-agent") ?? undefined,
+      success: result.ok,
+      error: result.ok ? null : result.reason ?? null,
+    });
+    return NextResponse.json({ ok: result.ok, verify: result }, { status: result.ok ? 200 : 422 });
+  }
+
+  const summary = await syncProvider({
+    userId: session.user.id,
+    projectId: project.id,
+    kind: canonical,
+  });
+  return NextResponse.json(summary, { status: summary.ok ? 200 : 207 });
 }

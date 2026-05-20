@@ -1,7 +1,10 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
-import { revalidatePath } from "next/cache";
+import { encryptSecret } from "@/lib/crypto/envelope";
+import { audit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -46,12 +49,19 @@ async function addProviderKey(formData: FormData) {
   const label = String(formData.get("label") ?? "").trim().toLowerCase() || "default";
   const secret = String(formData.get("secret") ?? "").trim();
   if (!secret) return;
-  // NOTE: For MVP we store secrets as-is. Before production, swap to KMS-backed
-  // envelope encryption — see ProviderConnection.secret in schema.prisma.
+  // Envelope-encrypt before persisting. The plaintext never touches the DB.
+  const cipher = encryptSecret(secret);
   await prisma.providerConnection.upsert({
     where: { userId_kind_label: { userId: session.user.id, kind, label } },
-    create: { userId: session.user.id, kind, label, secret },
-    update: { secret },
+    create: { userId: session.user.id, kind, label, secretCipher: cipher as object },
+    update: { secretCipher: cipher as object },
+  });
+  await audit({
+    userId: session.user.id,
+    action: "provider.connect",
+    target: `${kind}:${label}`,
+    meta: { kind, label },
+    success: true,
   });
   revalidatePath("/settings");
 }
@@ -63,6 +73,12 @@ async function deleteProvider(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   await prisma.providerConnection.deleteMany({
     where: { id, userId: session.user.id },
+  });
+  await audit({
+    userId: session.user.id,
+    action: "provider.disconnect",
+    target: id,
+    success: true,
   });
   revalidatePath("/settings");
 }
@@ -79,7 +95,10 @@ export default async function SettingsPage() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { providerConnections: { orderBy: { createdAt: "asc" } } },
+    include: {
+      providerConnections: { orderBy: { createdAt: "asc" } },
+      _count: { select: { personalAccessTokens: { where: { revokedAt: null } } } },
+    },
   });
   if (!user) redirect("/");
 
@@ -112,9 +131,9 @@ export default async function SettingsPage() {
         <header className="space-y-1">
           <h2 className="text-xl font-semibold tracking-tight">Connected providers</h2>
           <p className="text-sm text-muted">
-            API keys used by{" "}
-            <code className="rounded bg-surface2 px-1 py-0.5">/api/sync</code> to import token
-            receipts. Secrets are stored unencrypted in dev — switch to KMS before going live.
+            Admin API keys are envelope-encrypted at rest. The cron at{" "}
+            <code className="rounded bg-surface2 px-1 py-0.5">/api/cron/sync-all</code> uses them
+            to pull verified token receipts onto your projects.
           </p>
         </header>
 
@@ -131,7 +150,16 @@ export default async function SettingsPage() {
             >
               <div>
                 <div className="font-mono text-sm">{c.kind.toLowerCase()}</div>
-                <div className="text-xs text-muted">{c.label}</div>
+                <div className="text-xs text-muted">
+                  {c.label}
+                  {c.lastSyncedAt ? (
+                    <span className="ml-2">
+                      · last synced {c.lastSyncedAt.toISOString().slice(0, 16).replace("T", " ")}
+                    </span>
+                  ) : (
+                    <span className="ml-2 text-token">· never synced</span>
+                  )}
+                </div>
               </div>
               <form action={deleteProvider}>
                 <input type="hidden" name="id" value={c.id} />
@@ -146,7 +174,10 @@ export default async function SettingsPage() {
           ))}
         </ul>
 
-        <form action={addProviderKey} className="space-y-3 rounded-xl border border-border/70 bg-surface p-4">
+        <form
+          action={addProviderKey}
+          className="space-y-3 rounded-xl border border-border/70 bg-surface p-4"
+        >
           <div className="grid grid-cols-2 gap-3">
             <label className="block space-y-1">
               <span className="text-sm text-muted">Provider</span>
@@ -173,7 +204,7 @@ export default async function SettingsPage() {
               name="secret"
               required
               className="w-full rounded-md border border-border bg-surface px-3 py-2 font-mono text-sm focus:border-brand focus:outline-none"
-              placeholder="sk-…"
+              placeholder="sk-ant-admin-…"
             />
           </label>
           <button
@@ -183,6 +214,22 @@ export default async function SettingsPage() {
             Connect
           </button>
         </form>
+      </section>
+
+      <section className="space-y-3 rounded-xl border border-border/70 bg-surface p-4">
+        <h2 className="text-xl font-semibold tracking-tight">Personal access tokens</h2>
+        <p className="text-sm text-muted">
+          {user._count.personalAccessTokens > 0
+            ? `You have ${user._count.personalAccessTokens} active token${user._count.personalAccessTokens === 1 ? "" : "s"}.`
+            : "No active tokens."}{" "}
+          Use these to post receipts from CI or the SDK without a session cookie.
+        </p>
+        <Link
+          href="/settings/tokens"
+          className="inline-block rounded-md border border-border px-3 py-1.5 text-sm hover:bg-surface2"
+        >
+          Manage tokens →
+        </Link>
       </section>
     </div>
   );

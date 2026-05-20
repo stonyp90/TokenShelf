@@ -14,8 +14,11 @@ export async function Header() {
           <Link href="/" className="hover:text-text">
             Feed
           </Link>
+          <Link href="/marketplace" className="hover:text-text">
+            Marketplace
+          </Link>
           <Link href="/new" className="hover:text-text">
-            New project
+            New
           </Link>
           {session?.user ? (
             <div className="flex items-center gap-3">
@@ -24,6 +27,9 @@ export async function Header() {
                 className="hover:text-text"
               >
                 {session.user.handle ? `@${session.user.handle}` : "Set handle"}
+              </Link>
+              <Link href="/orders" className="hover:text-text">
+                Orders
               </Link>
               <Link href="/settings" className="hover:text-text">
                 Settings

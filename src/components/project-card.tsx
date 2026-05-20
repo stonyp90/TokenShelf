@@ -11,6 +11,7 @@ export type ProjectCardData = {
   totalOutputTokens: bigint;
   totalCostUsdCents: number;
   receiptCount: number;
+  verifiedReceiptCount?: number;
   owner: { handle: string | null; image: string | null; name: string | null };
 };
 
@@ -35,8 +36,14 @@ export function ProjectCard({ p }: { p: ProjectCardData }) {
             <span className="font-mono text-xs">no cover</span>
           </div>
         )}
-        <div className="absolute right-2 top-2 rounded-md border border-token/40 bg-bg/70 px-2 py-1 font-mono text-xs text-token backdrop-blur">
+        <div className="absolute right-2 top-2 flex items-center gap-2 rounded-md border border-token/40 bg-bg/70 px-2 py-1 font-mono text-xs text-token backdrop-blur">
           {formatTokens(totalTokens)} tok · {formatUsd(p.totalCostUsdCents)}
+          {p.verifiedReceiptCount && p.verifiedReceiptCount > 0 ? (
+            <span
+              className="inline-block h-2 w-2 rounded-full bg-brand shadow-[0_0_6px_1px_hsl(142_71%_50%/.6)]"
+              title={`${p.verifiedReceiptCount} of ${p.receiptCount} receipts are provider-verified.`}
+            />
+          ) : null}
         </div>
       </div>
       <div className="space-y-2 p-4">

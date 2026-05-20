@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const projects = await prisma.project.findMany({
     where: { published: true },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ verifiedReceiptCount: "desc" }, { createdAt: "desc" }],
     take: 24,
     include: { owner: { select: { handle: true, image: true, name: true } } },
   });

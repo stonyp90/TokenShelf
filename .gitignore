@@ -9,3 +9,7 @@ out
 .turbo
 prisma/dev.db
 prisma/dev.db-journal
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+.claude/launch.json
+
