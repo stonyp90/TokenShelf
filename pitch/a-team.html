@@ -1,0 +1,710 @@
+<!doctype html>
+<!--
+  Render to PDF via headless Chrome:
+
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+    --headless=new --disable-gpu --no-pdf-header-footer \
+    --print-to-pdf=pitch/a-team.pdf \
+    "file://$(pwd)/pitch/a-team.html"
+
+  2-page concept-level proposal. Use-case-led.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TokenShelf for a.team — Proposal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+
+@page { size: Letter; margin: 0; }
+
+:root {
+  --ground:      #fbf8f2;
+  --ground-warm: #f7efe1;
+  --ink:         #1a1813;
+  --ink-soft:    #3d3a32;
+  --mute:        #6b6760;
+  --faint:       #9a958c;
+  --rule:        #d8d3c7;
+  --rule-soft:   #ebe6dc;
+  --accent:      #c9690a;
+  --accent-warm: #f4e4c8;
+  --accent-pale: #fbf2e0;
+  --accent-deep: #9c4d05;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Helvetica, Arial, sans-serif;
+  font-size: 9.5pt;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+}
+
+/* ───────────── Page chrome ───────────── */
+
+.page {
+  width: 8.5in; height: 11in;
+  position: relative;
+  padding: 0.65in 0.75in 0.55in 0.75in;
+  page-break-after: always;
+  background: var(--ground);
+  overflow: hidden;
+}
+.page:last-of-type { page-break-after: auto; }
+
+.page.cover {
+  background:
+    radial-gradient(ellipse 110% 55% at 50% 0%, var(--ground-warm) 0%, var(--ground) 60%),
+    var(--ground);
+  position: relative;
+}
+.page.cover::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(196, 182, 152, 0.13) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(196, 182, 152, 0.13) 1px, transparent 1px);
+  background-size: 34pt 34pt;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+/* ───────────── Top brand bar ───────────── */
+
+.brandbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 22pt;
+}
+.logo { display: flex; align-items: center; gap: 8pt; }
+.logo .bars {
+  display: inline-flex; align-items: flex-end; gap: 2pt; height: 14pt;
+}
+.logo .bar { width: 4pt; border-radius: 1pt; }
+.logo .bar.a { height: 6pt;  background: #f0c073; }
+.logo .bar.b { height: 10pt; background: #d99548; }
+.logo .bar.c { height: 14pt; background: var(--accent); }
+.logo .name {
+  font-family: "Source Serif 4", serif;
+  font-weight: 700; font-size: 14pt;
+  letter-spacing: -0.01em;
+}
+.logo .name .dot { color: var(--accent); }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6pt;
+  padding: 3.5pt 11pt 3.5pt 7pt;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-warm), var(--ground-warm));
+  font-size: 6.8pt;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.pill .bullet {
+  width: 4.5pt; height: 4.5pt; border-radius: 50%;
+  background: var(--accent); display: inline-block;
+}
+
+/* ───────────── Eyebrow & titles ───────────── */
+
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8pt;
+  font-size: 7.5pt;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--mute);
+  font-weight: 600;
+  margin-bottom: 16pt;
+}
+.eyebrow::before {
+  content: ""; width: 16pt; height: 1.2pt;
+  background: var(--ink); display: inline-block;
+}
+.eyebrow .num { color: var(--accent); font-weight: 700; }
+
+h1.display {
+  font-family: "Source Serif 4", serif;
+  font-size: 38pt;
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  margin: 0 0 16pt 0;
+  color: var(--ink);
+}
+h1.display .accent {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 2pt;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 6pt;
+}
+
+h2.section {
+  font-family: "Source Serif 4", serif;
+  font-size: 22pt;
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  font-weight: 700;
+  margin: 0 0 12pt 0;
+  color: var(--ink);
+}
+h2.section .accent {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5pt;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 4pt;
+}
+
+h3.subsection {
+  font-family: "Source Serif 4", serif;
+  font-size: 11pt;
+  font-weight: 700;
+  margin: 14pt 0 6pt 0;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+  padding-bottom: 4pt;
+  border-bottom: 1pt solid var(--rule);
+}
+
+/* ───────────── Body copy ───────────── */
+
+p { margin: 5pt 0; color: var(--ink-soft); }
+p.lead {
+  font-size: 11pt;
+  color: var(--ink);
+  line-height: 1.5;
+  margin: 4pt 0 16pt 0;
+  max-width: 6.4in;
+}
+.strong { font-weight: 600; color: var(--ink); }
+
+/* ───────────── Use-case grid (page 1 centerpiece) ───────────── */
+
+.usecases {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12pt;
+  margin-top: 4pt;
+}
+.uc {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1pt solid var(--rule);
+  border-top: 2.5pt solid var(--accent);
+  padding: 11pt 14pt 12pt 14pt;
+  position: relative;
+}
+.uc .ucwho {
+  font-family: "Inter", sans-serif;
+  font-size: 6.8pt;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+  margin-bottom: 3pt;
+}
+.uc .uctitle {
+  font-family: "Source Serif 4", serif;
+  font-size: 14pt;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  line-height: 1.15;
+  margin-bottom: 5pt;
+}
+.uc .uccopy {
+  font-size: 8.7pt;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.uc .uccopy .strong { color: var(--ink); }
+.uc .ucvisib {
+  margin-top: 6pt;
+  padding-top: 5pt;
+  border-top: 1pt solid var(--rule-soft);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 6.8pt;
+  letter-spacing: 0.04em;
+  color: var(--mute);
+}
+.uc .ucvisib .who {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ───────────── Trust strip ───────────── */
+
+.truststrip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10pt;
+  margin: 14pt 0 0 0;
+  padding: 10pt 0 8pt 0;
+  border-top: 1pt solid var(--ink);
+  border-bottom: 1pt solid var(--rule);
+}
+.truststrip .tc {
+  font-size: 7.8pt;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+.truststrip .tc .k {
+  display: block;
+  font-family: "Inter", sans-serif;
+  font-size: 6.5pt;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+  margin-bottom: 2pt;
+}
+.truststrip .tc .v {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+/* ───────────── Beta incentive callout ───────────── */
+
+.incentive {
+  margin-top: 14pt;
+  background: linear-gradient(120deg, var(--accent-pale) 0%, var(--accent-warm) 100%);
+  padding: 12pt 16pt;
+  border-left: 3pt solid var(--accent);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16pt;
+  align-items: center;
+}
+.incentive .badge {
+  font-family: "Source Serif 4", serif;
+  font-weight: 700;
+  font-size: 12pt;
+  color: var(--accent-deep);
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  text-align: center;
+  padding-right: 16pt;
+  border-right: 1pt solid rgba(156, 77, 5, 0.3);
+}
+.incentive .badge .label {
+  display: block;
+  font-family: "Inter", sans-serif;
+  font-size: 6.4pt;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+  font-weight: 700;
+  margin-bottom: 4pt;
+}
+.incentive .copy {
+  font-size: 9pt;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.incentive .copy .strong { color: var(--ink); }
+
+/* ───────────── Outcome list (page 2) ───────────── */
+
+.numlist {
+  margin: 0;
+  border-top: 1pt solid var(--ink);
+}
+.nrow {
+  display: grid;
+  grid-template-columns: 26pt 1fr;
+  gap: 12pt;
+  padding: 9pt 0;
+  border-bottom: 1pt solid var(--rule-soft);
+}
+.nrow:last-child { border-bottom: 1pt solid var(--rule); }
+.nrow .nm {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9pt;
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding-top: 2pt;
+}
+.nrow .lead-phrase {
+  font-family: "Source Serif 4", serif;
+  font-weight: 700;
+  color: var(--ink);
+  font-size: 11.5pt;
+  line-height: 1.2;
+  display: block;
+  margin-bottom: 3pt;
+  letter-spacing: -0.005em;
+}
+.nrow .copy {
+  font-size: 8.7pt;
+  line-height: 1.48;
+  color: var(--ink-soft);
+}
+
+/* ───────────── Audience cards (page 2) ───────────── */
+
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16pt; }
+
+.audience-card {
+  border: 1pt solid var(--rule);
+  background: rgba(255, 255, 255, 0.45);
+  padding: 10pt 13pt;
+}
+.audience-card.primary { border-top: 2pt solid var(--accent); }
+.audience-card .who {
+  font-family: "Inter", sans-serif;
+  font-size: 6.8pt;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+  margin-bottom: 2pt;
+}
+.audience-card h4 {
+  font-family: "Source Serif 4", serif;
+  font-weight: 700;
+  font-size: 12pt;
+  letter-spacing: -0.005em;
+  margin: 0 0 5pt 0;
+  color: var(--ink);
+}
+.audience-card ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  font-size: 8.4pt;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.audience-card ul li {
+  padding: 2.5pt 0;
+  border-bottom: 1pt solid var(--rule-soft);
+  display: grid;
+  grid-template-columns: 8pt 1fr;
+  gap: 5pt;
+}
+.audience-card ul li:last-child { border-bottom: none; }
+.audience-card ul li::before {
+  content: "•";
+  color: var(--mute);
+  font-weight: 700;
+}
+.audience-card ul li.never { color: var(--mute); }
+.audience-card ul li.never::before {
+  content: "×";
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ───────────── Callout ───────────── */
+
+.callout {
+  background: var(--accent-pale);
+  padding: 11pt 14pt;
+  margin: 12pt 0 0 0;
+  border-left: 2pt solid var(--accent);
+}
+.callout .callout-label {
+  display: block;
+  font-size: 6.8pt;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+  margin-bottom: 4pt;
+}
+.callout p {
+  margin: 3pt 0 0 0;
+  color: var(--ink-soft);
+  font-size: 9pt;
+  line-height: 1.5;
+}
+
+/* ───────────── Page head / footer ───────────── */
+
+.pagehead {
+  display: flex; align-items: baseline; justify-content: space-between;
+  border-bottom: 1pt solid var(--rule);
+  padding-bottom: 6pt;
+  margin-bottom: 16pt;
+  font-size: 7.5pt;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--mute);
+  font-weight: 600;
+}
+.pagehead .left { display: flex; gap: 12pt; align-items: baseline; }
+.pagehead .pnum { color: var(--accent); font-weight: 700; }
+
+.pagefoot {
+  position: absolute;
+  bottom: 0.35in;
+  left: 0.75in; right: 0.75in;
+  display: flex; justify-content: space-between;
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 6.8pt;
+  color: var(--faint);
+  padding-top: 6pt;
+  border-top: 1pt solid var(--rule-soft);
+}
+
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE 1 — The concept · use cases
+     ═══════════════════════════════════════════════════════════ -->
+
+<section class="page cover">
+
+  <div class="brandbar">
+    <div class="logo">
+      <span class="bars">
+        <span class="bar a"></span>
+        <span class="bar b"></span>
+        <span class="bar c"></span>
+      </span>
+      <span class="name">TokenShelf<span class="dot">.</span></span>
+    </div>
+    <span class="pill">
+      <span class="bullet"></span>
+      Confidential &middot; For a.team stakeholders
+    </span>
+  </div>
+
+  <div class="eyebrow">
+    <span class="num">PROPOSAL</span>
+    <span>&middot; May 2026</span>
+  </div>
+
+  <h1 class="display">
+    Save up to 90% on AI tokens.<br>
+    <span class="accent">Make productivity provable.</span>
+  </h1>
+
+  <p class="lead">
+    Built on a fork of an established open-source AI cost optimizer that
+    already cuts token consumption by <span class="strong">60&ndash;90%</span>
+    across every major AI coding tool. TokenShelf adds a
+    <span class="strong">verifiable productivity layer</span> on top &mdash;
+    every consenting builder earns an
+    <span class="strong">official certified badge</span> with their score:
+    portable, signed, theirs to display. Builders adopt for the savings;
+    a.team gets the productivity proof as the network adopts naturally.
+  </p>
+
+  <h3 class="subsection">Four use cases &middot; one certified badge</h3>
+
+  <div class="usecases">
+
+    <div class="uc">
+      <div class="ucwho">Use case 01</div>
+      <div class="uctitle">Personal projects</div>
+      <div class="uccopy">
+        Private by default. Builders track their own AI-native
+        productivity over time. Visible to no one unless they choose to
+        share.
+      </div>
+      <div class="ucvisib">visible to: <span class="who">builder only</span></div>
+    </div>
+
+    <div class="uc">
+      <div class="ucwho">Use case 02</div>
+      <div class="uctitle">a.team interviews &amp; vetting</div>
+      <div class="uccopy">
+        Builders opt in to show TokenShelf scores during onboarding or
+        recruiter conversations. A verifiable proof point that beats
+        &ldquo;I&rsquo;m good with AI tools.&rdquo;
+      </div>
+      <div class="ucvisib">visible to: <span class="who">builder &middot; a.team recruiter</span></div>
+    </div>
+
+    <div class="uc">
+      <div class="ucwho">Use case 03</div>
+      <div class="uctitle">a.team engagements</div>
+      <div class="uccopy">
+        Embedded as the productivity-proof layer. Account managers see
+        the signal; buyers see only what the builder approves per
+        engagement.
+      </div>
+      <div class="ucvisib">visible to: <span class="who">builder &middot; account manager &middot; buyer (consent)</span></div>
+    </div>
+
+    <div class="uc">
+      <div class="ucwho">Use case 04</div>
+      <div class="uctitle">Client-accepted projects</div>
+      <div class="uccopy">
+        When a buyer adopts TokenShelf alongside the engagement, every
+        receipt is contractually verifiable by both sides. Higher trust,
+        fewer disputes.
+      </div>
+      <div class="ucvisib">visible to: <span class="who">builder &middot; buyer &middot; a.team</span></div>
+    </div>
+
+  </div>
+
+  <div class="truststrip">
+    <div class="tc">
+      <span class="k">Open daemon</span>
+      <span class="v">The capture tool is open source &amp; auditable. Builder project code stays private to them and their client.</span>
+    </div>
+    <div class="tc">
+      <span class="k">Secrets filtered</span>
+      <span class="v">Tokens, passwords, credentials stripped before anything leaves.</span>
+    </div>
+    <div class="tc">
+      <span class="k">No latency penalty</span>
+      <span class="v">Smaller prompts run faster; measurement is out-of-band.</span>
+    </div>
+    <div class="tc">
+      <span class="k">Builder-owned</span>
+      <span class="v">Score and prompts: show or hide per audience, anytime.</span>
+    </div>
+  </div>
+
+  <div class="pagefoot">
+    <span>TokenShelf &middot; Proposal for a.team &middot; Anthony Paquet</span>
+    <span>Concept proposal &middot; May 2026</span>
+    <span>Page 1 / 2</span>
+  </div>
+
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE 2 — Why it matters for a.team
+     ═══════════════════════════════════════════════════════════ -->
+
+<section class="page">
+
+  <div class="pagehead">
+    <div class="left">
+      <span class="pnum">02</span>
+      <span>Why it matters for a.team</span>
+    </div>
+    <span>TokenShelf &middot; Proposal &middot; May 2026</span>
+  </div>
+
+  <h2 class="section">
+    A trust layer no other<br>
+    talent network can <span class="accent">offer.</span>
+  </h2>
+
+  <p class="lead">
+    a.team sells elite AI talent measured by outcomes. Embedded as
+    a.team&rsquo;s productivity-proof layer, TokenShelf gives every
+    engagement a receipt buyers can verify themselves &mdash; and gives
+    builders credit for AI-native work that today gets dismissed as
+    &ldquo;just using a tool.&rdquo;
+  </p>
+
+  <div class="numlist">
+
+    <div class="nrow">
+      <div class="nm">01</div>
+      <div>
+        <span class="lead-phrase">A defensible differentiator.</span>
+        <div class="copy">
+          No other talent network can <em>prove</em> its builders are
+          more productive with AI &mdash; and no other network&rsquo;s
+          builders deliver engagements with materially lower AI spend by
+          default. The moat: cost savings that pull adoption, network
+          consent that earns trust, open code that anyone can verify.
+        </div>
+      </div>
+    </div>
+
+    <div class="nrow">
+      <div class="nm">02</div>
+      <div>
+        <span class="lead-phrase">Buyers verify the math themselves.</span>
+        <div class="copy">
+          Every receipt is cryptographically signed. Buyers don&rsquo;t
+          have to take a.team&rsquo;s word for it &mdash; they
+          re-verify independently. The signal works even if TokenShelf
+          or a.team disappears tomorrow.
+        </div>
+      </div>
+    </div>
+
+    <div class="nrow">
+      <div class="nm">03</div>
+      <div>
+        <span class="lead-phrase">A portable certified badge builders own.</span>
+        <div class="copy">
+          Builders who participate earn an
+          <em>official certified badge</em> with their score &mdash; signed,
+          shareable, and theirs to keep. It travels across LinkedIn,
+          portfolios, and future engagements. A real reason to stay on
+          a.team&rsquo;s network, especially for the AI-native builders
+          other networks are actively recruiting.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="two-col" style="margin-top: 14pt;">
+
+    <div class="audience-card primary">
+      <div class="who">What a.team sees</div>
+      <h4>Per-engagement metrics</h4>
+      <ul>
+        <li><span><span class="strong">Time</span> invested per session &amp; engagement</span></li>
+        <li><span><span class="strong">Model spend ($)</span> &amp; tokens used &mdash; input, output, cache</span></li>
+        <li><span><span class="strong">Overall score (%)</span> from objective signals</span></li>
+        <li><span>Account-manager view for retention &amp; renewal</span></li>
+        <li class="never"><span>Never: prompts unless the builder explicitly shares them</span></li>
+      </ul>
+    </div>
+
+    <div class="audience-card">
+      <div class="who">What buyers see</div>
+      <h4>With builder consent</h4>
+      <ul>
+        <li><span>Same metrics for the engagement they paid for: time, $, tokens, score (%)</span></li>
+        <li><span>Receipts &amp; certified badge they can re-verify themselves</span></li>
+        <li><span>Session-level breakdown only if the builder approves</span></li>
+        <li class="never"><span>Never: prompts unless the builder chooses to show them</span></li>
+      </ul>
+    </div>
+
+  </div>
+
+  <p style="margin-top: 10pt; font-size: 8.5pt; color: var(--ink-soft); text-align: center;">
+    <span class="strong">Builder decides what&rsquo;s visible</span> &mdash;
+    score, prompts, everything. Show or hide per audience, anytime, from a single command.
+  </p>
+
+  <div class="callout">
+    <span class="callout-label">The ask &middot; an open conversation</span>
+    <p>
+      A <span class="strong">30-minute conversation</span> with a.team
+      engineering and product, then a small beta with consenting
+      builders. From there, commercial structure, technical depth, and
+      rollout shape are open to whatever fits a.team &mdash; I&rsquo;d
+      rather match the model that works for the network than commit to
+      a number or a timeline on this page.
+    </p>
+  </div>
+
+  <div class="pagefoot">
+    <span>Gestion A. Paquet inc. &middot; Anthony Paquet</span>
+    <span>a.teamer &middot; Founder, TokenShelf</span>
+    <span>Page 2 / 2</span>
+  </div>
+
+</section>
+
+</body>
+</html>

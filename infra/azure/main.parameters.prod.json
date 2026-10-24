@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "_comment": "Prod env, starter tier. Cost-optimized defaults; scale via Azure CLI post-deploy when traffic justifies it. See infra/azure/README.md §Scaling.",
+  "parameters": {
+    "env":              { "value": "prod" },
+    "location":         { "value": "canadacentral" },
+    "prefix":           { "value": "tks" },
+    "ownerEmail":       { "value": "anthonypaquet1508@gmail.com" },
+    "appImageTag":      { "value": "latest" },
+    "customDomain":     { "value": "" },
+    "postgresAdminPassword": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<BOOTSTRAP_RG>/providers/Microsoft.KeyVault/vaults/<BOOTSTRAP_KV>"
+        },
+        "secretName": "tokenshelf-pg-admin-password"
+      }
+    }
+  }
+}

@@ -2,20 +2,402 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: dark;
+/* ─────────────────────────────────────────────────────────────────────
+   TokenShelf design tokens — Shadcn-style HSL variables.
+   Brand framework adapted from Tablix; colors and geometry are
+   TokenShelf-specific (indigo + amber, sharper radius, mono accents).
+   ───────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  :root {
+    /* Theme: dark by default (matches existing app) */
+    color-scheme: dark;
+
+    /* ── core surfaces (HSL components, used via hsl(var(--…)) ──── */
+    --background:        222 14% 7%;
+    --foreground:        210 20% 96%;
+    --card:              222 14% 10%;
+    --card-foreground:   210 20% 96%;
+    --popover:           222 14% 10%;
+    --popover-foreground:210 20% 96%;
+
+    /* ── primary (TokenShelf indigo) ────────────────────────────── */
+    --primary:           239 84% 67%;       /* #6366F1 → on dark goes to #818CF8 below */
+    --primary-foreground:0 0% 100%;
+
+    /* ── secondary / muted / accent ─────────────────────────────── */
+    --secondary:         222 14% 13%;
+    --secondary-foreground: 210 20% 96%;
+    --muted:             217 10% 14%;
+    --muted-foreground:  217 10% 64%;
+    --accent:            38 92% 50%;        /* amber #F59E0B — receipt warmth */
+    --accent-foreground: 222 14% 7%;
+
+    /* ── feedback ───────────────────────────────────────────────── */
+    --destructive:       0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --success:           142 71% 45%;
+    --warning:           38 92% 50%;
+    --info:              210 80% 60%;
+
+    /* ── borders / inputs / rings ───────────────────────────────── */
+    --border:            222 14% 18%;
+    --border-hover:      222 14% 24%;
+    --input:             222 14% 13%;
+    --ring:              239 84% 67%;
+
+    /* ── geometry (sharper than Tablix) ─────────────────────────── */
+    --radius:            0.5rem;            /* vs Tablix's 0.75rem */
+    --radius-sm:         0.25rem;
+    --radius-lg:         0.75rem;
+
+    /* ── extended surfaces (for sections / overlays) ───────────── */
+    --surface-inset:     222 14% 5%;
+    --surface-overlay:   222 14% 9%;
+
+    /* ── chart palette ──────────────────────────────────────────── */
+    --chart-1: 239 84% 67%;   /* indigo */
+    --chart-2: 38 92% 50%;    /* amber */
+    --chart-3: 142 71% 45%;   /* emerald (verified) */
+    --chart-4: 280 65% 60%;   /* violet (outlier) */
+    --chart-5: 199 89% 48%;   /* cyan */
+
+    /* ── trust tiers (matches receipt UI semantics) ─────────────── */
+    --trust-verified:    142 71% 45%;
+    --trust-proxied:     38 92% 50%;
+    --trust-self:        217 10% 50%;
+
+    /* ── tokenshelf palette (50–950 scale) ──────────────────────── */
+    --tokenshelf-50:  238 100% 97%;
+    --tokenshelf-100: 239 96%  94%;
+    --tokenshelf-200: 239 95%  88%;
+    --tokenshelf-300: 240 94%  79%;
+    --tokenshelf-400: 239 90%  72%;
+    --tokenshelf-500: 239 84% 67%;
+    --tokenshelf-600: 239 70% 58%;
+    --tokenshelf-700: 240 60% 48%;
+    --tokenshelf-800: 241 55% 38%;
+    --tokenshelf-900: 242 50% 28%;
+    --tokenshelf-950: 243 55% 14%;
+
+    /* ── amber accent palette ───────────────────────────────────── */
+    --amber-50:  48 100% 96%;
+    --amber-100: 48 96%  89%;
+    --amber-200: 48 97%  77%;
+    --amber-300: 46 97%  65%;
+    --amber-400: 43 96%  56%;
+    --amber-500: 38 92%  50%;
+    --amber-600: 32 95%  44%;
+    --amber-700: 26 90%  37%;
+    --amber-800: 23 83%  31%;
+    --amber-900: 22 78%  26%;
+    --amber-950: 21 92%  14%;
+
+    /* ── legacy aliases (existing components keep working) ─────── */
+    --legacy-brand:    142 71% 50%;
+    --legacy-brand-dim:142 50% 30%;
+    --legacy-token:    36 100% 60%;
+  }
+
+  /* Light mode opt-in (set <html data-theme="light"> or class="light") */
+  .light, [data-theme="light"] {
+    color-scheme: light;
+
+    --background:        0 0% 100%;
+    --foreground:        222 14% 7%;
+    --card:              0 0% 100%;
+    --card-foreground:   222 14% 7%;
+    --popover:           0 0% 100%;
+    --popover-foreground:222 14% 7%;
+
+    --primary:           239 70% 58%;       /* deeper on light bg */
+    --primary-foreground:0 0% 100%;
+
+    --secondary:         210 17% 97%;
+    --secondary-foreground: 222 14% 7%;
+    --muted:             210 17% 95%;
+    --muted-foreground:  217 10% 40%;
+    --accent:            38 92% 50%;
+    --accent-foreground: 222 14% 7%;
+
+    --border:            214 20% 88%;
+    --border-hover:      214 20% 78%;
+    --input:             214 20% 88%;
+    --ring:              239 70% 58%;
+
+    --surface-inset:     210 17% 97%;
+    --surface-overlay:   0 0% 100%;
+  }
+
+  /* Element resets */
+  * { @apply border-border; }
+
+  html, body {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+
+  body {
+    @apply antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  a { color: inherit; }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.35);
+  }
 }
 
-html,
-body {
-  background: hsl(222 14% 7%);
-  color: hsl(210 20% 96%);
+/* ─────────────────────────────────────────────────────────────────────
+   Layout utilities (containers, scroll, mobile safety)
+   ───────────────────────────────────────────────────────────────────── */
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+  .container-wide      { @apply mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8; }
+  .container-standard  { @apply mx-auto w-full max-w-6xl px-5 sm:px-6 lg:px-8; }
+  .container-narrow    { @apply mx-auto w-full max-w-4xl px-5 sm:px-6 lg:px-8; }
 }
 
-a {
-  color: inherit;
+section[id] { scroll-margin-top: 80px; }
+
+@supports (padding: env(safe-area-inset-bottom)) {
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pt-safe { padding-top: env(safe-area-inset-top); }
 }
 
-::selection {
-  background: hsl(142 71% 50% / 0.35);
+@media (max-width: 768px) {
+  .touch-target { min-height: 44px; min-width: 44px; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Background patterns — grid + dot + receipt-strip (TokenShelf-specific)
+   ───────────────────────────────────────────────────────────────────── */
+
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+.light .bg-grid, [data-theme="light"] .bg-grid {
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+}
+
+.bg-dot-grid {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.light .bg-dot-grid, [data-theme="light"] .bg-dot-grid {
+  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
+}
+
+/* TokenShelf signature: receipt strip — thin horizontal rules with subtle perforations */
+.bg-receipt-strip {
+  background-image: repeating-linear-gradient(
+    to right,
+    hsl(var(--border)) 0 6px,
+    transparent 6px 12px
+  );
+  height: 1px;
+  width: 100%;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Brand utilities — TokenShelf
+   Same pattern as Tablix's .bg-tablix family but indigo-tinted.
+   ───────────────────────────────────────────────────────────────────── */
+
+@layer utilities {
+  .bg-tokenshelf         { background-color: hsl(var(--primary)); }
+  .bg-tokenshelf-subtle  {
+    background: linear-gradient(135deg,
+      hsl(var(--primary) / 0.06),
+      hsl(var(--primary) / 0.02) 60%,
+      transparent
+    );
+  }
+  .bg-tokenshelf-dark    {
+    background: linear-gradient(to bottom right,
+      hsl(var(--surface-overlay)),
+      hsl(var(--surface-overlay) / 0.92),
+      hsl(var(--surface-inset))
+    );
+  }
+
+  .text-tokenshelf       { color: hsl(var(--primary)); }
+  .text-amber-accent     { color: hsl(var(--accent)); }
+  .border-tokenshelf     { border-color: hsl(var(--primary) / 0.25); }
+  .ring-tokenshelf       { --tw-ring-color: hsl(var(--primary) / 0.3); }
+  .shadow-tokenshelf     { box-shadow: 0 20px 40px -12px hsl(var(--primary) / 0.3); }
+  .shadow-tokenshelf-lg  { box-shadow: 0 25px 50px -12px hsl(var(--primary) / 0.4); }
+
+  /* Card styles */
+  .card-tokenshelf {
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px hsl(0 0% 0% / 0.2);
+    transition: border-color 200ms, box-shadow 200ms;
+  }
+  .card-tokenshelf:hover {
+    border-color: hsl(var(--border-hover));
+    box-shadow: 0 8px 24px -8px hsl(0 0% 0% / 0.3);
+  }
+  .card-tokenshelf-elevated {
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    box-shadow: 0 10px 30px -8px hsl(0 0% 0% / 0.4);
+  }
+
+  /* Button styles */
+  .btn-tokenshelf {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    border-radius: var(--radius);
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    padding: .625rem 1.25rem;
+    font-size: .875rem; font-weight: 600;
+    box-shadow: 0 4px 14px -4px hsl(var(--primary) / 0.45);
+    transition: transform 150ms, box-shadow 200ms, background-color 150ms;
+  }
+  .btn-tokenshelf:hover {
+    box-shadow: 0 10px 28px -8px hsl(var(--primary) / 0.55);
+    background-color: hsl(var(--primary) / 0.92);
+  }
+  .btn-tokenshelf:active { transform: translateY(0.5px); }
+
+  .btn-tokenshelf-outline {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    border-radius: var(--radius);
+    background-color: hsl(var(--card));
+    color: hsl(var(--foreground));
+    padding: .625rem 1.25rem;
+    font-size: .875rem; font-weight: 600;
+    border: 1px solid hsl(var(--border));
+    transition: border-color 150ms, background-color 150ms;
+  }
+  .btn-tokenshelf-outline:hover {
+    border-color: hsl(var(--primary) / 0.5);
+    background-color: hsl(var(--secondary));
+  }
+
+  .btn-amber {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    border-radius: var(--radius);
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+    padding: .625rem 1.25rem;
+    font-size: .875rem; font-weight: 600;
+    box-shadow: 0 4px 14px -4px hsl(var(--accent) / 0.45);
+  }
+
+  /* Section backgrounds */
+  .section-light   { background-color: hsl(var(--background)); }
+  .section-subtle  { background-color: hsl(var(--surface-inset)); }
+  .section-accent  { background: linear-gradient(135deg, hsl(var(--primary) / 0.08), transparent 60%); }
+  .section-dark    {
+    background: linear-gradient(to bottom right,
+      hsl(var(--surface-overlay)),
+      hsl(var(--surface-inset))
+    );
+    color: hsl(var(--foreground));
+  }
+
+  /* Typography — Tablix's framework, TokenShelf's tone */
+  .heading-xl { @apply text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight; color: hsl(var(--foreground)); letter-spacing: -0.02em; }
+  .heading-lg { @apply text-3xl sm:text-4xl font-bold tracking-tight; color: hsl(var(--foreground)); letter-spacing: -0.015em; }
+  .heading-md { @apply text-xl sm:text-2xl font-semibold; color: hsl(var(--foreground)); letter-spacing: -0.01em; }
+  .body-lg    { @apply text-lg sm:text-xl leading-relaxed; color: hsl(var(--muted-foreground)); }
+  .body-md    { @apply text-base leading-relaxed; color: hsl(var(--muted-foreground)); }
+  .label      { @apply text-xs font-semibold uppercase tracking-widest; color: hsl(var(--primary)); }
+
+  /* TokenShelf-specific: data tokens (hashes, IDs, token counts) */
+  .data-token {
+    font-family: var(--font-mono, ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace);
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-foreground));
+    letter-spacing: 0.01em;
+  }
+  .data-token-strong {
+    font-family: var(--font-mono, ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace);
+    color: hsl(var(--foreground));
+    font-weight: 500;
+  }
+
+  /* Trust tier chips */
+  .tier-verified {
+    background: hsl(var(--trust-verified) / 0.15);
+    color: hsl(var(--trust-verified));
+    border: 1px solid hsl(var(--trust-verified) / 0.3);
+  }
+  .tier-proxied {
+    background: hsl(var(--trust-proxied) / 0.15);
+    color: hsl(var(--trust-proxied));
+    border: 1px solid hsl(var(--trust-proxied) / 0.3);
+  }
+  .tier-self {
+    background: hsl(var(--trust-self) / 0.15);
+    color: hsl(var(--trust-self));
+    border: 1px solid hsl(var(--trust-self) / 0.3);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Animations — restrained for TokenShelf's "instrument panel" tone
+   ───────────────────────────────────────────────────────────────────── */
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes pulse-ring {
+  0%   { transform: scale(1);   opacity: 0.7; }
+  100% { transform: scale(1.6); opacity: 0;   }
+}
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+@keyframes slide-up {
+  0%   { transform: translateY(8px); opacity: 0; }
+  100% { transform: translateY(0);   opacity: 1; }
+}
+@keyframes scale-in {
+  0%   { transform: scale(0.97); opacity: 0; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+@keyframes progress-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@layer utilities {
+  .animate-float        { animation: float 5s ease-in-out infinite; }
+  .animate-pulse-ring   { animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  .animate-gradient     { background-size: 200% 200%; animation: gradient-shift 6s ease infinite; }
+  .animate-slide-up     { animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  .animate-scale-in     { animation: scale-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  .progress-shimmer     { animation: progress-shimmer 1.8s ease-in-out infinite; }
+}
+
+/* Reduced-motion: respect the OS preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
